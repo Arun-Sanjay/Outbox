@@ -84,14 +84,14 @@ testInc("road: cleanup on unmount", roadSrc, "watchRef.current?.remove");
 // ═══════════════════════════════════════════════════════════════════════════════
 const sumSrc = readApp("training/session-summary.tsx");
 console.log("\n=== P42: SESSION SUMMARY ===");
-testInc("sum: Session Complete title", sumSrc, "Session Complete");
+testInc("sum: SESSION COMPLETE title", sumSrc, "SESSION COMPLETE");
 testInc("sum: MetricValue components", sumSrc, "MetricValue");
 testInc("sum: intensity pills", sumSrc, "INTENSITY");
 testInc("sum: energy stars", sumSrc, "ENERGY");
 testInc("sum: sharpness stars", sumSrc, "SHARPNESS");
 testInc("sum: notes input", sumSrc, "NOTES");
 testInc("sum: XP display", sumSrc, "xpEarned");
-testInc("sum: SAVE button", sumSrc, "SAVE");
+testInc("sum: DONE button", sumSrc, "DONE");
 testInc("sum: updates session", sumSrc, "updateSession");
 testInc("sum: successNotification", sumSrc, "successNotification");
 testInc("sum: empty state", sumSrc, "No session to summarize");

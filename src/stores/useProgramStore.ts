@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { getJSON, setJSON } from "../db/storage";
+import { SYSTEM_PROGRAMS } from "../data/programs";
+import { toLocalDateKey } from "../lib/date";
 import type {
   BoxerType,
   ProgramDay,
@@ -7,110 +9,141 @@ import type {
   TrainingProgram,
 } from "../types";
 
+type ActiveProgramData = {
+  programId: string;
+  startDate: string;
+  completedDays: number[];
+  currentDay: number;
+  isPaused: boolean;
+};
+
 type ProgramState = {
   programs: TrainingProgram[];
-  activeProgram: TrainingProgram | null;
-  activeProgramDay: number | null;
+  activeProgramData: ActiveProgramData | null;
   boxerType: BoxerType | null;
   quizCompleted: boolean;
 
-  setBoxerType: (type: BoxerType) => void;
+  loadFromMMKV: () => void;
+  persistToMMKV: () => void;
+
   getAllPrograms: () => TrainingProgram[];
   getProgramById: (id: string) => TrainingProgram | undefined;
   getProgramsByBoxerType: (boxerType: BoxerType) => TrainingProgram[];
   getProgramsByFocus: (focus: ProgramFocus) => TrainingProgram[];
-  activateProgram: (programId: string) => void;
-  deactivateProgram: () => void;
-  setActiveProgramDay: (day: number) => void;
-  getCurrentProgramDay: () => ProgramDay | null;
-  advanceProgramDay: () => void;
-  createCustomProgram: (program: TrainingProgram) => void;
-  updateProgram: (id: string, updates: Partial<TrainingProgram>) => void;
+  getActiveProgram: () => {
+    program: TrainingProgram;
+    data: ActiveProgramData;
+    progress: number;
+    currentProgramDay: ProgramDay | null;
+  } | null;
+
+  setBoxerType: (type: BoxerType) => void;
   setQuizCompleted: (completed: boolean) => void;
-  loadFromMMKV: () => void;
-  persistToMMKV: () => void;
+  startProgram: (programId: string) => void;
+  completeDay: () => void;
+  pauseProgram: () => void;
+  resumeProgram: () => void;
+  stopProgram: () => void;
 };
 
 export const useProgramStore = create<ProgramState>((set, get) => ({
-  programs: [],
-  activeProgram: null,
-  activeProgramDay: null,
+  programs: [...SYSTEM_PROGRAMS],
+  activeProgramData: null,
   boxerType: null,
   quizCompleted: false,
 
-  setBoxerType: (type) => {
-    set({ boxerType: type });
-    get().persistToMMKV();
+  loadFromMMKV: () => {
+    const activeProgramData = getJSON<ActiveProgramData | null>("active_program_data", null);
+    const boxerType = getJSON<BoxerType | null>("boxer_type", null);
+    set({
+      programs: [...SYSTEM_PROGRAMS],
+      activeProgramData,
+      boxerType,
+      quizCompleted: boxerType !== null,
+    });
   },
+
+  persistToMMKV: () => {
+    const { activeProgramData, boxerType } = get();
+    setJSON("active_program_data", activeProgramData);
+    setJSON("boxer_type", boxerType);
+  },
+
   getAllPrograms: () => get().programs,
   getProgramById: (id) => get().programs.find((p) => p.id === id),
   getProgramsByBoxerType: (boxerType) =>
     get().programs.filter((p) => p.targetBoxerType.includes(boxerType)),
   getProgramsByFocus: (focus) =>
     get().programs.filter((p) => p.focus === focus),
-  activateProgram: (programId) => {
-    const program = get().programs.find((p) => p.id === programId);
-    if (program) {
-      set({ activeProgram: program, activeProgramDay: 1 });
-      get().persistToMMKV();
-    }
+
+  getActiveProgram: () => {
+    const { activeProgramData, programs } = get();
+    if (!activeProgramData) return null;
+    const program = programs.find((p) => p.id === activeProgramData.programId);
+    if (!program) return null;
+    const totalDays = program.days.length;
+    const progress = totalDays > 0 ? activeProgramData.completedDays.length / totalDays : 0;
+    const currentProgramDay = program.days[activeProgramData.currentDay - 1] ?? null;
+    return { program, data: activeProgramData, progress, currentProgramDay };
   },
-  deactivateProgram: () => {
-    set({ activeProgram: null, activeProgramDay: null });
-    get().persistToMMKV();
-  },
-  setActiveProgramDay: (day) => {
-    set({ activeProgramDay: day });
-    get().persistToMMKV();
-  },
-  getCurrentProgramDay: () => {
-    const { activeProgram, activeProgramDay } = get();
-    if (!activeProgram || activeProgramDay === null) return null;
-    return activeProgram.days[activeProgramDay - 1] ?? null;
-  },
-  advanceProgramDay: () => {
-    set((s) => ({
-      activeProgramDay:
-        s.activeProgramDay !== null ? s.activeProgramDay + 1 : null,
-    }));
-    get().persistToMMKV();
-  },
-  createCustomProgram: (program) => {
-    set((s) => ({ programs: [...s.programs, program] }));
-    get().persistToMMKV();
-  },
-  updateProgram: (id, updates) => {
-    set((s) => ({
-      programs: s.programs.map((p) =>
-        p.id === id ? { ...p, ...updates } : p
-      ),
-    }));
-    get().persistToMMKV();
-  },
-  setQuizCompleted: (completed) => {
-    set({ quizCompleted: completed });
+
+  setBoxerType: (type) => {
+    set({ boxerType: type });
     get().persistToMMKV();
   },
 
-  loadFromMMKV: () => {
-    const programs = getJSON<TrainingProgram[]>("programs", []);
-    const activeProgram = getJSON<TrainingProgram | null>(
-      "active_program",
-      null
-    );
-    const boxerType = getJSON<BoxerType | null>("boxer_type", null);
-    set({
-      programs,
-      activeProgram,
-      boxerType,
-      activeProgramDay: activeProgram ? 1 : null,
-      quizCompleted: boxerType !== null,
-    });
+  setQuizCompleted: (completed) => {
+    set({ quizCompleted: completed });
   },
-  persistToMMKV: () => {
-    const { programs, activeProgram, boxerType } = get();
-    setJSON("programs", programs);
-    setJSON("active_program", activeProgram);
-    setJSON("boxer_type", boxerType);
+
+  startProgram: (programId) => {
+    const data: ActiveProgramData = {
+      programId,
+      startDate: toLocalDateKey(new Date()),
+      completedDays: [],
+      currentDay: 1,
+      isPaused: false,
+    };
+    set({ activeProgramData: data });
+    get().persistToMMKV();
+  },
+
+  completeDay: () => {
+    set((s) => {
+      if (!s.activeProgramData) return s;
+      const { currentDay, completedDays } = s.activeProgramData;
+      const updated = completedDays.includes(currentDay)
+        ? completedDays
+        : [...completedDays, currentDay];
+      return {
+        activeProgramData: {
+          ...s.activeProgramData,
+          completedDays: updated,
+          currentDay: currentDay + 1,
+        },
+      };
+    });
+    get().persistToMMKV();
+  },
+
+  pauseProgram: () => {
+    set((s) => {
+      if (!s.activeProgramData) return s;
+      return { activeProgramData: { ...s.activeProgramData, isPaused: true } };
+    });
+    get().persistToMMKV();
+  },
+
+  resumeProgram: () => {
+    set((s) => {
+      if (!s.activeProgramData) return s;
+      return { activeProgramData: { ...s.activeProgramData, isPaused: false } };
+    });
+    get().persistToMMKV();
+  },
+
+  stopProgram: () => {
+    set({ activeProgramData: null });
+    get().persistToMMKV();
   },
 }));

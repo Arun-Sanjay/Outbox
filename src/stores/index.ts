@@ -9,3 +9,4 @@ export { useBenchmarkStore } from "./useBenchmarkStore";
 export { useCampStore } from "./useCampStore";
 export { useKnowledgeStore } from "./useKnowledgeStore";
 export { useOnboardingStore } from "./useOnboardingStore";
+export { usePremiumStore } from "./usePremiumStore";

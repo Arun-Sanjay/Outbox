@@ -10,8 +10,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, fonts, spacing, radius, TOUCH_MIN } from "../../src/theme";
 import { PageHeader, Panel, MetricValue } from "../../src/components";
+import { StreakDisplay, XPBar } from "../../src/components/gamification";
+import { AchievementPopup, LevelUpCelebration } from "../../src/components/gamification";
 import { useSessionStore } from "../../src/stores/useSessionStore";
-import { formatDurationShort } from "../../src/lib/workout-utils";
+import { useProfileStore } from "../../src/stores/useProfileStore";
+import { useCelebrationStore } from "../../src/stores/useCelebrationStore";
+import { getSessionTypeLabel } from "../../src/lib/workout-utils";
 import { successNotification } from "../../src/lib/haptics";
 import { goToHQ } from "../../src/lib/navigation";
 import type { Intensity } from "../../src/types";
@@ -21,8 +25,10 @@ const INTENSITIES: Intensity[] = ["light", "moderate", "hard", "war"];
 export default function SessionSummaryScreen() {
   const history = useSessionStore((s) => s.trainingHistory);
   const updateSession = useSessionStore((s) => s.updateTrainingSession);
+  const profile = useProfileStore((s) => s.profile);
+  const celebration = useCelebrationStore((s) => s.current);
+  const dismissCelebration = useCelebrationStore((s) => s.dismiss);
 
-  // Most recent session
   const session = history[0];
 
   const [intensity, setIntensity] = useState<Intensity>(session?.intensity ?? "moderate");
@@ -68,19 +74,47 @@ export default function SessionSummaryScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* Celebration overlays */}
+      {celebration?.type === "achievement" && (
+        <AchievementPopup
+          achievement={celebration.achievement}
+          onClaim={dismissCelebration}
+        />
+      )}
+      {celebration?.type === "rank_up" && (
+        <LevelUpCelebration
+          rank={celebration.rank}
+          onDismiss={dismissCelebration}
+        />
+      )}
+
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <PageHeader kicker="COMPLETE" title="Session Complete" subtitle={`+${session.xpEarned} XP`} />
+        <PageHeader
+          kicker="SESSION COMPLETE"
+          title={getSessionTypeLabel(session.sessionType)}
+          subtitle={`+${session.xpEarned} XP`}
+        />
 
         {/* Stats */}
-        <View style={styles.metricsRow}>
-          <MetricValue label="Duration" value={Math.round(session.durationSeconds / 60)} size="lg" animated />
-          {session.rounds !== null && (
-            <MetricValue label="Rounds" value={session.rounds} size="lg" animated />
-          )}
-          {session.distanceMeters !== null && (
-            <MetricValue label="Distance (m)" value={session.distanceMeters} size="lg" animated />
-          )}
-        </View>
+        <Panel style={styles.statsPanel}>
+          <View style={styles.metricsRow}>
+            <MetricValue label="Duration" value={Math.round(session.durationSeconds / 60)} size="lg" color={colors.accent} animated />
+            {session.rounds !== null && (
+              <MetricValue label="Rounds" value={session.rounds} size="lg" animated />
+            )}
+            {session.distanceMeters !== null && (
+              <MetricValue label="Distance (m)" value={session.distanceMeters} size="lg" animated />
+            )}
+          </View>
+        </Panel>
+
+        {/* Combo stats (if combo session) */}
+        {session.comboModeUsed && (
+          <Panel tone="subtle" style={styles.comboPanel}>
+            <Text style={styles.sectionLabel}>COMBO SESSION</Text>
+            <Text style={styles.comboNote}>Combos drilled with callouts</Text>
+          </Panel>
+        )}
 
         {/* Intensity */}
         <View style={styles.section}>
@@ -105,7 +139,6 @@ export default function SessionSummaryScreen() {
           <Text style={styles.sectionLabel}>ENERGY LEVEL</Text>
           {renderStars(energy, setEnergy)}
         </View>
-
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>SHARPNESS</Text>
           {renderStars(sharpness, setSharpness)}
@@ -124,8 +157,24 @@ export default function SessionSummaryScreen() {
           />
         </View>
 
+        {/* XP + Streak */}
+        <Panel tone="subtle" style={styles.xpPanel}>
+          <View style={styles.xpRow}>
+            <Text style={styles.xpLabel}>XP EARNED</Text>
+            <Text style={styles.xpValue}>+{session.xpEarned}</Text>
+          </View>
+          {profile && (
+            <XPBar currentXP={profile.totalXP} />
+          )}
+          {profile && profile.currentStreak > 0 && (
+            <View style={styles.streakRow}>
+              <StreakDisplay days={profile.currentStreak} compact />
+            </View>
+          )}
+        </Panel>
+
         <Pressable onPress={handleSave} style={styles.saveBtn}>
-          <Text style={styles.saveBtnText}>SAVE</Text>
+          <Text style={styles.saveBtnText}>DONE</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -138,7 +187,10 @@ const styles = StyleSheet.create({
   content: { padding: spacing.xl, paddingBottom: 100 },
   empty: { flex: 1, justifyContent: "center", alignItems: "center", gap: spacing["2xl"] },
   emptyText: { ...fonts.heading, color: colors.textMuted },
-  metricsRow: { flexDirection: "row", justifyContent: "space-around", marginBottom: spacing["3xl"] },
+  statsPanel: { padding: spacing.xl, marginBottom: spacing["2xl"] },
+  metricsRow: { flexDirection: "row", justifyContent: "space-around" },
+  comboPanel: { padding: spacing.lg, marginBottom: spacing["2xl"] },
+  comboNote: { ...fonts.small, color: colors.textSecondary, marginTop: spacing.xs },
   section: { marginBottom: spacing["2xl"] },
   sectionLabel: { ...fonts.caption, color: colors.textSecondary, marginBottom: spacing.sm },
   pillRow: { flexDirection: "row", gap: spacing.sm },
@@ -155,9 +207,13 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 100, backgroundColor: colors.inputBg, borderWidth: 1,
     borderColor: colors.inputBorder, borderRadius: radius.md,
-    padding: spacing.lg, fontSize: 16, color: colors.text,
-    textAlignVertical: "top",
+    padding: spacing.lg, fontSize: 16, color: colors.text, textAlignVertical: "top",
   },
+  xpPanel: { padding: spacing.xl, marginBottom: spacing["2xl"], gap: spacing.lg },
+  xpRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  xpLabel: { fontSize: 10, fontWeight: "700", color: colors.textMuted, letterSpacing: 2 },
+  xpValue: { fontSize: 24, fontWeight: "800", color: colors.accent },
+  streakRow: { marginTop: spacing.sm },
   saveBtn: {
     backgroundColor: colors.accent, height: 56, borderRadius: radius.md,
     alignItems: "center", justifyContent: "center", marginTop: spacing.lg,

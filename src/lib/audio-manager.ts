@@ -1,4 +1,5 @@
 import { Audio } from "expo-av";
+import * as Speech from "expo-speech";
 
 // ── Volume state ─────────────────────────────────────────────────────────────
 
@@ -16,18 +17,7 @@ export function setCalloutVolume(v: number) {
   calloutVolume = Math.max(0, Math.min(1, v));
 }
 
-function getEffectiveVolume(channel: "bell" | "callout"): number {
-  const channelVol = channel === "bell" ? bellVolume : calloutVolume;
-  return masterVolume * channelVol;
-}
-
-// ── Tone generation (simple beeps via expo-av) ───────────────────────────────
-// Since we can't bundle audio files without assets, we use a minimal approach:
-// preload sounds from Audio.Sound or generate simple notification tones.
-
-let bellSound: Audio.Sound | null = null;
-let beepSound: Audio.Sound | null = null;
-let warningSound: Audio.Sound | null = null;
+// ── Audio mode ───────────────────────────────────────────────────────────────
 
 export async function initAudio() {
   try {
@@ -41,72 +31,59 @@ export async function initAudio() {
   }
 }
 
-// ── Sound playback ───────────────────────────────────────────────────────────
-// In production these would load actual audio files.
-// For now we use placeholder functions that the HUD calls.
+// ── TTS-based sound effects ──────────────────────────────────────────────────
+// Uses expo-speech to generate audio cues without bundled sound files.
+// In a future version, these can be swapped for real audio assets.
+
+function speakCue(text: string, rate = 1.2, pitch = 0.8) {
+  if (masterVolume === 0 || bellVolume === 0) return;
+  Speech.speak(text, {
+    rate,
+    pitch,
+    language: "en-US",
+  });
+}
+
+// ── Bell sounds ──────────────────────────────────────────────────────────────
 
 export async function playBell() {
-  try {
-    if (bellSound) {
-      await bellSound.setVolumeAsync(getEffectiveVolume("bell"));
-      await bellSound.replayAsync();
-    }
-  } catch {
-    // Silently fail if audio unavailable
-  }
-}
-
-export async function playWarning() {
-  try {
-    if (warningSound) {
-      await warningSound.setVolumeAsync(getEffectiveVolume("bell"));
-      await warningSound.replayAsync();
-    }
-  } catch {
-    // Silently fail
-  }
-}
-
-export async function playBeep() {
-  try {
-    if (beepSound) {
-      await beepSound.setVolumeAsync(getEffectiveVolume("bell"));
-      await beepSound.replayAsync();
-    }
-  } catch {
-    // Silently fail
-  }
-}
-
-export async function playCountdownBeep() {
-  await playBeep();
+  speakCue("Ding ding ding", 1.3, 1.2);
 }
 
 export async function playRoundStartBell() {
-  await playBell();
+  speakCue("Ding ding", 1.3, 1.2);
 }
 
 export async function playRoundEndBell() {
-  await playBell();
-}
-
-export async function playTenSecondWarning() {
-  await playWarning();
+  speakCue("Ding ding ding", 1.2, 1.0);
 }
 
 export async function playFinalBell() {
-  // Double bell for final round
-  await playBell();
+  speakCue("Ding ding ding ding", 1.1, 1.0);
+}
+
+// ── Warning sounds ───────────────────────────────────────────────────────────
+
+export async function playTenSecondWarning() {
+  speakCue("Ten seconds", 1.4, 0.9);
+}
+
+export async function playWarning() {
+  speakCue("Warning", 1.3, 0.9);
+}
+
+// ── Countdown beeps ──────────────────────────────────────────────────────────
+
+export async function playBeep() {
+  speakCue("Beep", 1.5, 1.5);
+}
+
+export async function playCountdownBeep() {
+  speakCue("Beep", 1.5, 1.5);
 }
 
 // ── Cleanup ──────────────────────────────────────────────────────────────────
 
 export async function unloadSounds() {
-  try {
-    if (bellSound) { await bellSound.unloadAsync(); bellSound = null; }
-    if (beepSound) { await beepSound.unloadAsync(); beepSound = null; }
-    if (warningSound) { await warningSound.unloadAsync(); warningSound = null; }
-  } catch {
-    // Silently fail
-  }
+  Speech.stop();
 }

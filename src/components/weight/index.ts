@@ -1,2 +1,3 @@
-// Placeholder — components populated in later phases
-export {};
+export { WeightChart } from "./WeightChart";
+export { WeightEntryModal } from "./WeightEntryModal";
+export { WeightClassIndicator } from "./WeightClassIndicator";

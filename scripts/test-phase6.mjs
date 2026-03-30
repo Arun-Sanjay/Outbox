@@ -205,17 +205,15 @@ testInc("timer: 20s rounds in data", presetData, "roundSeconds: 20");
 console.log("\n=== PROGRAM STORE ===");
 const pgs = stores.program;
 testInc("program: programs state", pgs, "programs: TrainingProgram[]");
-testInc("program: activeProgram state", pgs, "activeProgram: TrainingProgram | null");
-testInc("program: activeProgramDay state", pgs, "activeProgramDay: number | null");
+testInc("program: activeProgramData state", pgs, "activeProgramData:");
 testInc("program: boxerType state", pgs, "boxerType: BoxerType | null");
 testInc("program: quizCompleted state", pgs, "quizCompleted: boolean");
-for (const action of ["setBoxerType", "getAllPrograms", "getProgramById", "getProgramsByBoxerType", "getProgramsByFocus", "activateProgram", "deactivateProgram", "setActiveProgramDay", "getCurrentProgramDay", "advanceProgramDay", "createCustomProgram", "updateProgram", "setQuizCompleted"]) {
+for (const action of ["setBoxerType", "getAllPrograms", "getProgramById", "getProgramsByBoxerType", "getProgramsByFocus", "startProgram", "completeDay", "stopProgram", "getActiveProgram", "setQuizCompleted"]) {
   testInc(`program: ${action} action`, pgs, `${action}:`);
 }
-testInc("program: MMKV key programs", pgs, '"programs"');
-testInc("program: MMKV key active_program", pgs, '"active_program"');
+testInc("program: MMKV key active_program_data", pgs, '"active_program_data"');
 testInc("program: MMKV key boxer_type", pgs, '"boxer_type"');
-testInc("program: default activeProgram null", pgs, "activeProgram: null");
+testInc("program: default activeProgramData null", pgs, "activeProgramData: null");
 testInc("program: default quizCompleted false", pgs, "quizCompleted: false");
 
 // ═══════════════════════════════════════════════════════════════════════════════
